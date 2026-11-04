@@ -214,6 +214,12 @@ main{max-width:640px;margin:0 auto;padding:14px 12px 60px}
 .de p{margin:2px 0 0;font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums}
 .danger{min-height:50px;border-radius:14px;border:1px solid var(--red);color:var(--red);font-weight:600;width:100%;margin-top:10px}
 .danger.armed{background:var(--red);color:#fff}
+.outline{min-height:54px;border-radius:14px;border:1px solid var(--line);background:var(--surface);font-weight:700;width:100%;margin-top:12px}
+.acts .rm{border-color:var(--red);color:var(--red)}
+.sh .stack{display:grid;gap:10px;margin-top:14px}
+.sh .stack button{min-height:54px;border-radius:14px;font-weight:700;padding:0 14px}
+.sh .stack .rm-go{background:var(--red);color:#fff}
+.sh .stack .rm-alt{border:1px solid var(--red);color:var(--red)}
 .primary{min-height:54px;border-radius:14px;background:var(--day);color:var(--on-day);font-weight:700;width:100%;margin-top:12px}
 
 /* sheet + toast */
@@ -370,7 +376,7 @@ function unitOf(p){return p.load?" kg":(p.metric==="sec"?" s":" reps")}
 function allExercises(){
   const seen=new Map();
   for(const d of days())for(const e of d.exercises||[])if(!seen.has(e.id))seen.set(e.id,{id:e.id,name:e.name,day:d.id});
-  for(const s of S.sessions)for(const k in s.entries||{}){const e=s.entries[k];if(!seen.has(e.exId))seen.set(e.exId,{id:e.exId,name:e.name,day:null})}
+  for(const s of S.sessions)for(const k in s.entries||{}){const e=s.entries[k];if(!e||!(e.sets||[]).some(x=>x.done))continue;if(!seen.has(e.exId))seen.set(e.exId,{id:e.exId,name:e.name,day:null})}
   return [...seen.values()];
 }
 
@@ -461,8 +467,8 @@ function vHome(){
   }
   const n=S.sessions.filter(s=>s.finishedAt).length;
   h+=`<div class="duo" style="margin-top:6px"><button class="tile" data-a="progress">Progress</button><button class="tile" data-a="history">History${n?" ("+n+")":""}</button></div>`;
-  h+=`<h2 class="sec">Your data</h2><div class="duo"><button class="tile" data-a="export">Export for Claude</button><label class="tile">Import file<input type="file" id="imp" accept=".json,application/json"></label></div>
-  <p class="hint">Everything is saved on this phone. Export now and then as a backup, and send the file to Claude to review your progress.</p>`;
+  h+=`<h2 class="sec">Your data</h2><div class="duo"><button class="tile" data-a="export">Back up all data</button><label class="tile">Import file<input type="file" id="imp" accept=".json,application/json"></label></div>
+  <p class="hint">Everything is saved on this phone. Back up now and then to keep a copy. To send Claude a single workout, use “Export this workout” at the end of it.</p>`;
   return h;
 }
 function vWorkout(){
@@ -515,7 +521,7 @@ function focus(k){
       ${stepper("r",K,i,s.r,(e.metric==="sec"?"seconds":"reps")+", set "+(i+1),prevTag(s.r,l?l.r:null,""))}
       <button class="chk" data-a="check" data-k="${K}" data-i="${i}" aria-label="${s.done?"Undo set ":"Log set "}${i+1}">${s.done?"✓":i+1}</button></div>`;
   });
-  h+=`<div class="acts"><button class="later" data-a="later" data-k="${K}">Later</button><button data-a="swap" data-k="${K}">Swap</button><button data-a="skip" data-k="${K}">Skip</button><button data-a="exercise" data-ex="${esc(e.exId)}">Progress</button><span class="sp"></span><button data-a="addset" data-k="${K}" aria-label="Add a set">+ Set</button><button data-a="delset" data-k="${K}" aria-label="Remove last set">− Set</button></div>`;
+  h+=`<div class="acts"><button class="later" data-a="later" data-k="${K}">Later</button><button data-a="swap" data-k="${K}">Swap</button><button data-a="skip" data-k="${K}">Skip</button><button class="rm" data-a="remove" data-k="${K}">Remove</button><button data-a="exercise" data-ex="${esc(e.exId)}">Progress</button><span class="sp"></span><button data-a="addset" data-k="${K}" aria-label="Add a set">+ Set</button><button data-a="delset" data-k="${K}" aria-label="Remove last set">− Set</button></div>`;
   return h+`</section>`;
 }
 function stepper(f,K,i,v,label,pv){
@@ -606,7 +612,7 @@ function vDetail(){
   let h=`<div class="sum"><h1>${fin?"Workout done":esc(s.dayName)}</h1><p>${fin?esc(s.dayName)+", ":""}${niceDate(s.date)}, started ${hhmm(s.startedAt)}${s.finishedAt?"":", not finished"}</p>
     <div class="stats"><div><b>${st.mins??"–"}</b><span>minutes</span></div><div><b>${st.sets}</b><span>sets</span></div><div><b>${st.kg.toLocaleString("en-GB")}</b><span>kg lifted</span></div></div></div>`;
   if(pb.length)h+=`<div class="pbs"><h2>New bests</h2>${pb.map(p=>`<div class="pb"><span>${esc(p.name)}<small>was ${esc(p.was)}</small></span><b>${esc(p.now)}</b></div>`).join("")}</div>`;
-  if(fin)h+=`<button class="primary" data-a="home">Back to home</button><h2 class="sec">Full log</h2>`;
+  if(fin)h+=`<button class="outline" data-a="expwk" data-id="${esc(s.id)}">Export this workout</button><button class="primary" data-a="home">Back to home</button><h2 class="sec">Full log</h2>`;
   for(const k of s.order||Object.keys(s.entries)){
     const e=s.entries[k],done=e.sets.filter(x=>x.done);
     const line=done.length?setsText(done,e.load,e.metric):(e.status==="skipped"?"Skipped":"Not done");
@@ -614,6 +620,7 @@ function vDetail(){
     h+=`<button class="de" data-a="exercise" data-ex="${esc(e.exId)}"><h3>${esc(e.name)}${from}</h3><p>${esc(line)}</p></button>`;
   }
   if(!s.finishedAt)h+=`<button class="primary" data-a="resume" data-id="${esc(s.id)}">Resume this workout</button>`;
+  if(!fin)h+=`<button class="outline" data-a="expwk" data-id="${esc(s.id)}">Export this workout</button>`;
   const armed=S.confirm==="del-"+s.id;
   h+=`<button class="danger ${armed?"armed":""}" data-a="del" data-id="${esc(s.id)}">${armed?"Tap again to delete":"Delete this workout"}</button>`;
   return h;
@@ -623,6 +630,12 @@ function renderSheet(){
   if(!S.sheet){el.hidden=true;el.innerHTML="";return}
   el.hidden=false;
   if(S.sheet.type==="moves"){el.innerHTML=vMoves();return}
+  if(S.sheet.type==="remove"){
+    const c=S.cur,e=c.entries[S.sheet.k],day=dayById(c.day),dc=doneCount(e);
+    const inProg=day&&(day.exercises||[]).some(x=>x.id===(e.swappedFrom||e.exId));
+    el.innerHTML=`<div class="sh" role="dialog" aria-modal="true" aria-labelledby="sh-t"><h2 id="sh-t">Remove ${esc(e.name)}?</h2><p>${dc?`The ${dc} set${dc===1?"":"s"} you’ve logged for it today will be removed too. `:""}${inProg?`Remove it from ${esc(day.name)}’s program too, so it doesn’t come back next time?`:""}</p><div class="stack">${inProg?`<button class="rm-go" data-a="doremove" data-prog="1">Remove from today and from ${esc(day.name)}’s program</button><button class="rm-alt" data-a="doremove">Remove from today only</button>`:`<button class="rm-go" data-a="doremove">Remove from today</button>`}<button class="cancel" data-a="shx">Cancel</button></div></div>`;
+    return;
+  }
   if(S.sheet.type==="swap"){
     const e=S.cur.entries[S.sheet.k];
     el.innerHTML=`<div class="sh" role="dialog" aria-modal="true" aria-labelledby="sh-t"><h2 id="sh-t">Swap exercise</h2><p>What are you doing instead of ${esc(e.name)}? It’s logged under the new name.</p><label for="sh-n">Exercise</label><input id="sh-n" autocomplete="off" placeholder="e.g. Leg extension"><div class="row2"><button class="cancel" data-a="shx">Cancel</button><button class="go" data-a="doswap">Swap</button></div></div>`;
@@ -651,11 +664,19 @@ function vMoves(){
 
 /* ---------- export / import ---------- */
 async function exportData(){
-  const data={app:"gym-log",version:1,exportedAt:new Date().toISOString(),program:S.program,sessions:S.sessions,moves:S.moves};
-  const txt=JSON.stringify(data,null,1),name="gym-log-"+localDate(new Date())+".json";
+  saveFile({app:"gym-log",version:1,kind:"backup",exportedAt:new Date().toISOString(),program:S.program,sessions:S.sessions,moves:S.moves},"gym-log-backup-"+localDate(new Date())+".json","Gym log backup");
+}
+/* One workout on its own. Same shape as a backup, minus program and moves, so
+   importing it only adds that workout. */
+function exportWorkout(id){
+  const s=S.sessions.find(x=>x.id===id);if(!s)return;
+  saveFile({app:"gym-log",version:1,kind:"workout",exportedAt:new Date().toISOString(),sessions:[s]},"gym-log-workout-"+s.date+"-"+slug(s.day||"workout")+".json",s.dayName+" workout, "+niceDate(s.date));
+}
+async function saveFile(data,name,title){
+  const txt=JSON.stringify(data,null,1);
   try{
     const file=new File([txt],name,{type:"application/json"});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:"Gym log"});return}
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title});return}
   }catch(e){if(e&&e.name==="AbortError")return}
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:"application/json"}));a.download=name;document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);
@@ -774,7 +795,18 @@ const actions={
     if(S.confirm!=="del-"+id){S.confirm="del-"+id;render();return}
     S.sessions=S.sessions.filter(s=>s.id!==id);if(S.cur&&S.cur.id===id)S.cur=null;S.justFinished=null;save();go("history");
   },
-  export(){exportData()}
+  export(){exportData()},
+  expwk(b){exportWorkout(b.dataset.id)},
+  remove(b){S.sheet={type:"remove",k:b.dataset.k};renderSheet()},
+  doremove(b){
+    const c=S.cur,k=S.sheet&&S.sheet.k,e=c&&c.entries[k];if(!e)return;
+    const pid=e.swappedFrom||e.exId,day=dayById(c.day);
+    if(b.dataset.prog&&day)day.exercises=(day.exercises||[]).filter(x=>x.id!==pid);
+    const next=c.active===k?nextUndone(k):c.active;
+    c.order=c.order.filter(x=>x!==k);delete c.entries[k];c.active=next&&c.entries[next]?next:null;
+    S.sheet=null;S.scrollTo=true;save();renderSheet();render();
+    toast(b.dataset.prog?e.name+" removed from "+day.name+"’s program":e.name+" removed from today");
+  }
 };
 document.addEventListener("click",ev=>{
   const b=ev.target.closest("[data-a]");
