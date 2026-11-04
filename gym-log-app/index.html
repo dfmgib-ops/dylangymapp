@@ -79,6 +79,19 @@ main{max-width:640px;margin:0 auto;padding:14px 12px 60px}
 .wk-g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
 .wk-d{font-size:13px;color:var(--muted);margin-bottom:6px}
 .wk-d.today{color:var(--ink);font-weight:700}
+.wk-n{font-family:var(--cond);font-size:17px;font-weight:700;line-height:1;margin:-3px 0 6px;color:var(--muted)}
+.wk-n.today{color:var(--ink)}
+.wk-mv{display:block;width:100%;min-height:48px;margin-top:12px;border-radius:14px;border:1px solid var(--line);font-weight:600}
+.d-when{grid-column:2;font-size:14px;font-weight:600;color:var(--muted);margin-bottom:2px;padding-right:70px}
+.dayrow .plate{grid-row:1/5}
+.mv-day{margin-top:14px}
+.mv-n{font-family:var(--cond);font-weight:800;font-size:24px;color:var(--day-ink);margin-bottom:6px}
+.mv-g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.chip{min-height:52px;border-radius:12px;border:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;font-size:13px;color:var(--muted)}
+.chip b{font-family:var(--cond);font-size:19px;color:var(--ink)}
+.chip.on{background:var(--day);border-color:var(--day);color:var(--on-day)}
+.chip.on b{color:var(--on-day)}
+.chip:disabled{opacity:.35;cursor:default}
 .dot{width:38px;height:38px;margin:0 auto;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:17px}
 .dot.plan{border:3px solid var(--day)}
 .dot.rest{background:var(--soft);width:10px;height:10px;margin-top:14px}
@@ -238,26 +251,44 @@ const hhmm=iso=>{const d=new Date(iso);return pad(d.getHours())+":"+pad(d.getMin
 const mmss=s=>{s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h?h+":"+pad(m)+":"+pad(x):m+":"+pad(x)};
 const PLAN={1:"mon",3:"wed",5:"fri"};
 
-const S={program:null,sessions:[],cur:null,view:"home",detailId:null,exId:null,from:"home",justFinished:null,confirm:null,sheet:null,scrollTo:false,pop:null,storeErr:false};
+const S={program:null,sessions:[],moves:{},cur:null,view:"home",detailId:null,exId:null,from:"home",justFinished:null,confirm:null,sheet:null,scrollTo:false,pop:null,storeErr:false};
 
 /* ---------- storage ---------- */
 function load(){
   try{
     const raw=localStorage.getItem(KEY);
-    if(raw){const d=JSON.parse(raw);S.program=d.program&&Array.isArray(d.program.days)?d.program:clone(DEFAULT_PROGRAM);S.sessions=Array.isArray(d.sessions)?d.sessions:[];S.cur=S.sessions.find(s=>s.id===d.curId&&!s.finishedAt)||null}
+    if(raw){const d=JSON.parse(raw);S.program=d.program&&Array.isArray(d.program.days)?d.program:clone(DEFAULT_PROGRAM);S.sessions=Array.isArray(d.sessions)?d.sessions:[];S.cur=S.sessions.find(s=>s.id===d.curId&&!s.finishedAt)||null;S.moves=cleanMoves(d.moves)}
     else{S.program=clone(DEFAULT_PROGRAM);S.sessions=[]}
   }catch(e){S.program=clone(DEFAULT_PROGRAM);S.sessions=[];S.storeErr=true}
   sortSessions();
 }
 function sortSessions(){S.sessions.sort((a,b)=>String(b.startedAt).localeCompare(String(a.startedAt)))}
 function save(){
-  try{localStorage.setItem(KEY,JSON.stringify({v:1,program:S.program,sessions:S.sessions,curId:S.cur&&!S.cur.finishedAt?S.cur.id:null}));S.storeErr=false}
+  try{localStorage.setItem(KEY,JSON.stringify({v:1,program:S.program,sessions:S.sessions,moves:S.moves,curId:S.cur&&!S.cur.finishedAt?S.cur.id:null}));S.storeErr=false}
   catch(e){S.storeErr=true}
 }
 
 /* ---------- data helpers ---------- */
 const days=()=>(S.program&&Array.isArray(S.program.days))?S.program.days:[];
 const dayById=id=>days().find(d=>d.id===id);
+/* ---------- schedule: workouts can be moved to another day, per week ----------
+   S.moves = {"<Monday of week, YYYY-MM-DD>": {"<day id>": "<YYYY-MM-DD>"}} */
+const isoDate=ds=>/^\d{4}-\d{2}-\d{2}$/.test(ds);
+function cleanMoves(m){
+  const out={};if(!m||typeof m!=="object")return out;
+  for(const wk in m){if(!isoDate(wk)||!m[wk]||typeof m[wk]!=="object")continue;
+    for(const id in m[wk])if(isoDate(m[wk][id]))(out[wk]=out[wk]||{})[id]=m[wk][id]}
+  return out;
+}
+function weekOf(d){d=d||new Date();const mon=new Date(d.getFullYear(),d.getMonth(),d.getDate()-(d.getDay()+6)%7);
+  return Array.from({length:7},(_,i)=>new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+i))}
+function usualDate(week,dayId){const i=week.findIndex(d=>PLAN[d.getDay()]===dayId);return i<0?null:localDate(week[i])}
+function planDate(week,dayId){const wk=localDate(week[0]),m=S.moves[wk];return (m&&m[dayId])||usualDate(week,dayId)}
+function plannedOn(week,ds){return days().map(d=>d.id).filter(id=>planDate(week,id)===ds)}
+function weekRange(week){
+  const a=week[0],b=week[6],o={day:"numeric",month:"short"};
+  return a.getMonth()===b.getMonth()?a.getDate()+"–"+b.toLocaleDateString("en-GB",o):a.toLocaleDateString("en-GB",o)+" – "+b.toLocaleDateString("en-GB",o);
+}
 function progEx(exId){for(const d of days())for(const e of d.exercises||[])if(e.id===exId)return e;return null}
 function dayOfEx(exId){for(const d of days())for(const e of d.exercises||[])if(e.id===exId)return d.id;return null}
 function lastSets(exId,excludeId){
@@ -395,30 +426,32 @@ function body(){
   return vHome();
 }
 function vWeek(){
-  const now=new Date(),wd=(now.getDay()+6)%7,mon=new Date(now.getFullYear(),now.getMonth(),now.getDate()-wd);
-  const today=localDate(now);let cells="",did=0;
-  for(let i=0;i<7;i++){
-    const d=new Date(mon.getFullYear(),mon.getMonth(),mon.getDate()+i),ds=localDate(d),dow=d.getDay();
-    const s=S.sessions.find(x=>x.date===ds&&x.finishedAt);
-    const isToday=ds===today,plan=PLAN[dow];
+  const week=weekOf(),today=localDate(new Date()),dates=week.map(localDate);
+  const done=S.sessions.filter(x=>x.finishedAt&&dates.includes(x.date));
+  const doneIds=new Set(done.map(x=>x.day));
+  let cells="";
+  for(const d of week){
+    const ds=localDate(d),isToday=ds===today;
+    const s=done.find(x=>x.date===ds),plan=plannedOn(week,ds).find(id=>!doneIds.has(id));
     let dot;
-    if(s){did++;dot=`<div class="dot did d-${esc(s.day)} ${isToday?"today-ring":""}" aria-label="Done">✓</div>`}
-    else if(plan)dot=`<div class="dot plan d-${plan} ${isToday?"today-ring":""}"></div>`;
+    if(s)dot=`<div class="dot did d-${esc(s.day)} ${isToday?"today-ring":""}" aria-label="Done">✓</div>`;
+    else if(plan)dot=`<div class="dot plan d-${esc(plan)} ${isToday?"today-ring":""}" aria-label="${esc((dayById(plan)||{}).name)} planned"></div>`;
     else dot=`<div class="dot rest"></div>`;
-    cells+=`<div><div class="wk-d ${isToday?"today":""}">${d.toLocaleDateString("en-GB",{weekday:"narrow"})}</div>${dot}</div>`;
+    cells+=`<div><div class="wk-d ${isToday?"today":""}">${d.toLocaleDateString("en-GB",{weekday:"narrow"})}</div><div class="wk-n ${isToday?"today":""}">${d.getDate()}</div>${dot}</div>`;
   }
-  return `<div class="week"><div class="wk-h"><b>This week</b><span>${did} of 3 workouts</span></div><div class="wk-g">${cells}</div></div>`;
+  return `<div class="week"><div class="wk-h"><b>This week, ${weekRange(week)}</b><span>${done.length} of ${days().length} workouts</span></div><div class="wk-g">${cells}</div><button class="wk-mv" data-a="moves">Move a workout to another day</button></div>`;
 }
 function vHome(){
   let h=vWeek();const open=openSession();
   if(open)h+=`<button class="resume d-${esc(open.day)}" data-a="resume" data-id="${esc(open.id)}"><span class="r-k">Workout in progress</span><span class="r-t">${esc(open.dayName)}, started ${hhmm(open.startedAt)}</span><span class="r-go">Resume</span></button>`;
-  const todayId=PLAN[new Date().getDay()];
+  const week=weekOf(),today=localDate(new Date());
   h+=`<h2 class="sec">Start a workout</h2>`;
   for(const d of days()){
     const last=S.sessions.find(s=>s.day===d.id&&s.finishedAt);
     const armed=S.confirm==="start-"+d.id;
     h+=`<button class="dayrow d-${esc(d.id)} ${armed?"armed":""}" data-a="start" data-day="${esc(d.id)}">
-      ${d.id===todayId?'<span class="tag">Today</span>':""}<span class="plate"></span>
+      ${(()=>{const pd=planDate(week,d.id);if(!pd)return "";if(pd===today)return '<span class="tag">Today</span>';
+        return `<span class="d-when">${pd!==usualDate(week,d.id)?"Moved to ":""}${niceDate(pd)}</span>`})()}<span class="plate"></span>
       <span class="d-name">${esc(d.name)}</span>
       <span class="d-sub">${armed?"Tap again to start a new workout":esc([d.title,d.focus].filter(Boolean).join(", "))}</span>
       <span class="d-last">${last?"Last done "+niceDate(last.date):"Not done yet in the app"}</span></button>`;
@@ -566,6 +599,7 @@ function renderSheet(){
   const el=$("#sheet");
   if(!S.sheet){el.hidden=true;el.innerHTML="";return}
   el.hidden=false;
+  if(S.sheet.type==="moves"){el.innerHTML=vMoves();return}
   if(S.sheet.type==="swap"){
     const e=S.cur.entries[S.sheet.k];
     el.innerHTML=`<div class="sh" role="dialog" aria-modal="true" aria-labelledby="sh-t"><h2 id="sh-t">Swap exercise</h2><p>What are you doing instead of ${esc(e.name)}? It’s logged under the new name.</p><label for="sh-n">Exercise</label><input id="sh-n" autocomplete="off" placeholder="e.g. Leg extension"><div class="row2"><button class="cancel" data-a="shx">Cancel</button><button class="go" data-a="doswap">Swap</button></div></div>`;
@@ -575,9 +609,26 @@ function renderSheet(){
   setTimeout(()=>{const i=$("#sh-n");if(i)i.focus()},50);
 }
 
+function vMoves(){
+  const week=weekOf(),wk=localDate(week[0]);
+  let h=`<div class="sh" role="dialog" aria-modal="true" aria-labelledby="sh-t"><h2 id="sh-t">Move a workout</h2><p>This week, ${weekRange(week)}. Tap the day you’ll do each workout. Next week goes back to your usual days.</p>`;
+  for(const day of days()){
+    const cur=planDate(week,day.id);
+    h+=`<div class="mv-day d-${esc(day.id)}"><div class="mv-n">${esc(day.name)}</div><div class="mv-g">`;
+    for(const d of week){
+      const ds=localDate(d),on=ds===cur,taken=!on&&plannedOn(week,ds).length>0;
+      h+=`<button class="chip ${on?"on":""}" data-a="mv" data-day="${esc(day.id)}" data-date="${ds}" ${taken?"disabled":""} aria-pressed="${on}" aria-label="${esc(day.name)} on ${niceDate(ds)}">${d.toLocaleDateString("en-GB",{weekday:"short"})}<b>${d.getDate()}</b></button>`;
+    }
+    h+=`</div></div>`;
+  }
+  const moved=S.moves[wk]&&Object.keys(S.moves[wk]).length;
+  h+=`<div class="row2"><button class="cancel" data-a="mvreset" ${moved?"":"disabled"}>Usual days</button><button class="go" data-a="shx">Done</button></div></div>`;
+  return h;
+}
+
 /* ---------- export / import ---------- */
 async function exportData(){
-  const data={app:"gym-log",version:1,exportedAt:new Date().toISOString(),program:S.program,sessions:S.sessions};
+  const data={app:"gym-log",version:1,exportedAt:new Date().toISOString(),program:S.program,sessions:S.sessions,moves:S.moves};
   const txt=JSON.stringify(data,null,1),name="gym-log-"+localDate(new Date())+".json";
   try{
     const file=new File([txt],name,{type:"application/json"});
@@ -592,6 +643,7 @@ function importText(txt){
   const hasProg=d&&d.program&&Array.isArray(d.program.days),hasSess=d&&Array.isArray(d.sessions);
   if(!hasProg&&!hasSess){toast("That file isn’t a Gym Log export");return}
   if(hasProg)S.program=d.program;
+  if(d.moves){const m=cleanMoves(d.moves);for(const wk in m)S.moves[wk]=Object.assign(S.moves[wk]||{},m[wk])}
   let added=0;
   if(hasSess){
     const byId=new Map(S.sessions.map(s=>[s.id,s]));
@@ -665,6 +717,15 @@ const actions={
   swap(b){S.sheet={type:"swap",k:b.dataset.k};renderSheet()},
   add(){S.sheet={type:"add"};renderSheet()},
   shx(){S.sheet=null;renderSheet()},
+  moves(){S.sheet={type:"moves"};renderSheet()},
+  mv(b){
+    const week=weekOf(),wk=localDate(week[0]),id=b.dataset.day,ds=b.dataset.date;
+    const m=Object.assign({},S.moves[wk]);
+    if(ds===usualDate(week,id))delete m[id];else m[id]=ds;
+    if(Object.keys(m).length)S.moves[wk]=m;else delete S.moves[wk];
+    save();render();renderSheet();
+  },
+  mvreset(){const wk=localDate(weekOf()[0]);delete S.moves[wk];save();render();renderSheet()},
   doswap(){
     const name=$("#sh-n").value.trim();if(!name)return $("#sh-n").focus();
     const c=S.cur,k=S.sheet.k,old=c.entries[k];
