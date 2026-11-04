@@ -177,6 +177,9 @@ main{max-width:640px;margin:0 auto;padding:14px 12px 60px}
 .chg small{display:block;font-weight:500;font-style:italic;color:var(--muted)}
 .chart{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px 12px 8px;margin-bottom:12px}
 .chart svg{display:block;width:100%;height:auto;overflow:visible}
+.lgd{display:flex;gap:16px;font-size:14px;color:var(--muted);padding:6px 4px 4px}
+.lgd i{display:inline-block;width:18px;height:0;vertical-align:middle;margin-right:6px}
+.lg-top{border-top:3px solid var(--day-ink)} .lg-low{border-top:3px dashed var(--muted)}
 .big{display:flex;align-items:baseline;gap:10px;padding:0 4px 8px}
 .big b{font-family:var(--cond);font-weight:800;font-size:44px;line-height:1;color:var(--day-ink)}
 .big span{color:var(--muted);font-size:15px}
@@ -360,7 +363,7 @@ function timeline(exId){
       const done=e.sets.filter(x=>x.done);if(done.length)pts.push({date:s.date,sid:s.id,load:e.load,metric:e.metric,sets:done,name:e.name});
     }
   }
-  pts.forEach(p=>{p.top=Math.max(...p.sets.map(x=>p.load?x.w:x.r))});
+  pts.forEach(p=>{p.vals=p.sets.map(x=>Number(p.load?x.w:x.r)||0);p.top=Math.max(...p.vals);p.low=Math.min(...p.vals)});
   return pts;
 }
 function unitOf(p){return p.load?" kg":(p.metric==="sec"?" s":" reps")}
@@ -518,6 +521,18 @@ function focus(k){
 function stepper(f,K,i,v,label,pv){
   return `<div class="stp"><button class="sb" data-a="${f}" data-k="${K}" data-i="${i}" data-d="-1" aria-label="Less ${label}">−</button><div class="nv"><input class="num" type="text" inputmode="decimal" enterkeyhint="done" data-f="${f}" data-k="${K}" data-i="${i}" value="${fmt(v)}" aria-label="${label}">${pv}</div><button class="sb" data-a="${f}" data-k="${K}" data-i="${i}" data-d="1" aria-label="More ${label}">+</button></div>`;
 }
+/* Change between two workouts. The heaviest set leads; if it didn't move, the
+   other sets are compared one by one, so a lighter set going up still counts. */
+function chg(a,b,unit,now){
+  const d=Math.round((b.top-a.top)*100)/100;
+  if(d)return chgTag(a.top,b.top,unit,now);
+  const n=Math.min(a.vals.length,b.vals.length);let sum=0,cnt=0;
+  for(let i=0;i<n;i++){const x=Math.round((b.vals[i]-a.vals[i])*100)/100;if(x){sum+=x;cnt++}}
+  sum=Math.round(sum*100)/100;
+  if(!sum)return chgTag(0,0,unit,now);
+  const note=(cnt===1?"on 1 set":"over "+cnt+" sets")+(now?", "+now:"");
+  return chgTag(0,sum,unit,note);
+}
 function chgTag(first,last,unit,since){
   const d=Math.round((last-first)*100)/100;
   if(!d)return `<span class="chg">No change${since?`<small>${since}</small>`:""}</span>`;
@@ -536,39 +551,47 @@ function vProgress(){
       const t=timeline(e.id);
       let right;
       if(!t.length)right=`<span class="chg">Not logged yet</span>`;
-      else{const a=t[0],b=t[t.length-1];right=t.length<2?`<span class="chg">${fmt(b.top)}${unitOf(b)}<small>${a.base?"starting point":"1 workout"}</small></span>`:chgTag(a.top,b.top,unitOf(b),"now "+fmt(b.top)+unitOf(b))}
+      else{const a=t[0],b=t[t.length-1];right=t.length<2?`<span class="chg">${fmt(b.top)}${unitOf(b)}<small>${a.base?"starting point":"1 workout"}</small></span>`:chg(a,b,unitOf(b),"now "+fmt(b.top)+unitOf(b))}
       h+=`<button class="row" data-a="exercise" data-ex="${esc(e.id)}"><span class="r-name">${esc(e.name)}</span>${right}</button>`;
     }
     h+=`</div>`;
   }
-  return h+`<p class="hint">Changes are measured from your program start on ${S.program.startedProgram?shortDate(S.program.startedProgram):"day one"}, using the heaviest set of each workout.</p>`;
+  return h+`<p class="hint">Changes are measured from your program start on ${S.program.startedProgram?shortDate(S.program.startedProgram):"day one"}, using the heaviest set of each workout. If that stays the same, it compares your other sets.</p>`;
 }
 function chart(t){
   const W=320,H=150,L=36,R=12,T=14,B=24;
-  const vals=t.map(p=>p.top);let lo=Math.min(...vals),hi=Math.max(...vals);
+  const two=t.some(p=>p.low!==p.top);
+  const vals=t.map(p=>p.top).concat(two?t.map(p=>p.low):[]);let lo=Math.min(...vals),hi=Math.max(...vals);
   if(lo===hi){lo-=2.5;hi+=2.5}
   const x=i=>L+(t.length===1?(W-L-R)/2:i*(W-L-R)/(t.length-1));
   const y=v=>T+(hi-v)*(H-T-B)/(hi-lo);
   const pts=t.map((p,i)=>x(i).toFixed(1)+","+y(p.top).toFixed(1)).join(" ");
   let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Heaviest set per workout">`;
   for(const v of [lo,hi])g+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${fmt(v)}</text>`;
+  if(two){
+    const lp=t.map((p,i)=>x(i).toFixed(1)+","+y(p.low).toFixed(1)).join(" ");
+    g+=`<polyline points="${lp}" fill="none" stroke="var(--muted)" stroke-width="2.5" stroke-dasharray="6 5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    t.forEach((p,i)=>{g+=`<circle cx="${x(i)}" cy="${y(p.low)}" r="3" fill="${p.base?"var(--surface)":"var(--muted)"}" stroke="var(--muted)" stroke-width="2"/>`});
+  }
   g+=`<polyline points="${pts}" fill="none" stroke="var(--day-ink)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`;
   t.forEach((p,i)=>{g+=`<circle cx="${x(i)}" cy="${y(p.top)}" r="${i===t.length-1?5:3.5}" fill="${p.base?"var(--surface)":"var(--day-ink)"}" stroke="var(--day-ink)" stroke-width="2"/>`});
   g+=`<text x="${x(0)}" y="${H-4}" font-size="11" fill="var(--muted)" text-anchor="${t.length===1?"middle":"start"}">${t[0].base?"Start":shortDate(t[0].date)}</text>`;
   if(t.length>1)g+=`<text x="${x(t.length-1)}" y="${H-4}" font-size="11" fill="var(--muted)" text-anchor="end">${shortDate(t[t.length-1].date)}</text>`;
-  return g+`</svg>`;
+  g+=`</svg>`;
+  if(two)g+=`<div class="lgd"><span><i class="lg-top"></i>Heaviest set</span><span><i class="lg-low"></i>Lightest set</span></div>`;
+  return g;
 }
 function vExercise(){
   const t=timeline(S.exId),pe=progEx(S.exId);
   const name=pe?pe.name:(t.length?t[t.length-1].name:S.exId);
-  let h=`<div class="hero"><h1>${esc(name)}</h1><p>Heaviest set per workout</p></div>`;
+  let h=`<div class="hero"><h1>${esc(name)}</h1><p>Your sets, workout by workout</p></div>`;
   if(!t.length)return h+`<div class="msg">No sets logged for this exercise yet.</div>`;
   const a=t[0],b=t[t.length-1],u=unitOf(b);
-  h+=`<div class="chart"><div class="big"><b>${fmt(b.top)}${u}</b><span>${t.length>1?chgTag(a.top,b.top,u,""):""}</span></div>${chart(t)}</div>`;
+  h+=`<div class="chart"><div class="big"><b>${fmt(b.top)}${u}</b><span>${t.length>1?chg(a,b,u,""):""}</span></div>${chart(t)}</div>`;
   h+=`<h2 class="sec">Every workout</h2><div class="tl">`;
   for(let i=t.length-1;i>=0;i--){
     const p=t[i],prev=t[i-1];
-    h+=`<div><b>${p.base?"Program start, "+shortDate(p.date):niceDate(p.date)}</b><i>${esc(setsText(p.sets,p.load,p.metric))}</i>${prev?chgTag(prev.top,p.top,unitOf(p),""):""}</div>`;
+    h+=`<div><b>${p.base?"Program start, "+shortDate(p.date):niceDate(p.date)}</b><i>${esc(setsText(p.sets,p.load,p.metric))}</i>${prev?chg(prev,p,unitOf(p),""):""}</div>`;
   }
   return h+`</div>`;
 }
