@@ -1,0 +1,11 @@
+# The app lives in gym-log-app/ and has no build step.
+# It is served at /gym-log-app/ (keep that path: the iPhone home-screen app and
+# its saved data are tied to it). The bare site address redirects there.
+[build]
+  publish = "."
+  command = ""
+
+[[redirects]]
+  from = "/"
+  to = "/gym-log-app/"
+  status = 302
