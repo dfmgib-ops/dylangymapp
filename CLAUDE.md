@@ -4,7 +4,8 @@ Personal gym-logging PWA used on an iPhone at the gym. No build step.
 
 ## Layout
 - App files live in `gym-log-app/`: `index.html` (all HTML/CSS/JS), `sw.js`, `manifest.webmanifest`, icons.
-- Hosted on Netlify, auto-deploys from `main`. Publish directory must be `gym-log-app`.
+- Hosted on Netlify, auto-deploys from `main`. Settings live in `netlify.toml`: the repo root is published, so the app is served at `/gym-log-app/`, and `/` redirects there.
+- Don't move the app to a different path. The iPhone home-screen app points at `/gym-log-app/`, and iOS keeps home-screen app data separately, so changing the path could strand saved data.
 
 ## Data — never break existing data
 - All data is in localStorage under the key `"gymlog-v1"` (`KEY` in `index.html`). **Never change this key.**
