@@ -216,6 +216,13 @@ main{max-width:640px;margin:0 auto;padding:14px 12px 60px}
 .danger.armed{background:var(--red);color:#fff}
 .outline{min-height:54px;border-radius:14px;border:1px solid var(--line);background:var(--surface);font-weight:700;width:100%;margin-top:12px}
 .acts .rm{border-color:var(--red);color:var(--red)}
+.sw-list{display:grid;gap:6px;margin-top:8px}
+.sw-list button{min-height:48px;border-radius:12px;border:1px solid var(--line);text-align:left;padding:0 14px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sw-list button small{font-weight:500;color:var(--muted);font-size:13px;white-space:nowrap}
+.sw-list button.on{border:2px solid var(--ink);padding:0 13px}
+.sh .tick{display:flex;align-items:center;gap:12px;min-height:52px;margin:12px 0 0;font-size:16px;font-weight:600;cursor:pointer}
+.sh .tick input{width:26px;height:26px;min-height:0;margin:0;flex:none;accent-color:var(--ink)}
+.sh .tick small{display:block;font-weight:500;color:var(--muted);font-size:13px}
 .sh .stack{display:grid;gap:10px;margin-top:14px}
 .sh .stack button{min-height:54px;border-radius:14px;font-weight:700;padding:0 14px}
 .sh .stack .rm-go{background:var(--red);color:#fff}
@@ -225,7 +232,7 @@ main{max-width:640px;margin:0 auto;padding:14px 12px 60px}
 /* sheet + toast */
 #sheet{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
 #sheet[hidden]{display:none}
-.sh{width:100%;max-width:640px;background:var(--surface);border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px))}
+.sh{max-height:92vh;overflow-y:auto;width:100%;max-width:640px;background:var(--surface);border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px))}
 .sh h2{margin:0 0 4px;font-family:var(--cond);font-size:30px}
 .sh p{margin:0 0 12px;color:var(--muted);font-size:15px}
 .sh label{display:block;font-size:14px;font-weight:600;margin:10px 0 4px}
@@ -359,7 +366,8 @@ function bests(s){
 /* full timeline for one exercise, oldest first, starting from the program's baseline */
 function timeline(exId){
   const pts=[],pe=progEx(exId);
-  if(pe&&pe.load!==false&&Array.isArray(pe.start)&&pe.start.length&&S.program.startedProgram)
+  // Exercises added to the template later have no "program start" point.
+  if(pe&&!pe.addedOn&&pe.load!==false&&Array.isArray(pe.start)&&pe.start.length&&S.program.startedProgram)
     pts.push({date:S.program.startedProgram,base:true,load:true,metric:pe.metric||"reps",sets:pe.start.map(w=>({w,r:pe.reps||10}))});
   const asc=S.sessions.slice().reverse();
   for(const s of asc){
@@ -505,7 +513,7 @@ function prevTag(cur,prev,unit){
 function focus(k){
   const c=S.cur,e=c.entries[k],n=e.sets.length,dc=doneCount(e),K=esc(k);
   let h=`<section class="focus" id="focus"><div class="f-top"><h2 class="f-name">${esc(e.name)}</h2><span class="f-count">${dc}/${n}</span></div>`;
-  if(e.swappedFrom){const p=progEx(e.swappedFrom);h+=`<p class="note">Instead of ${esc(p?p.name:e.swappedFrom)}</p>`}
+  if(e.swappedFrom){const p=progEx(e.swappedFrom);h+=`<p class="note">Instead of ${esc(e.swappedFromName||(p?p.name:e.swappedFrom))}</p>`}
   if(e.note)h+=`<p class="note">${esc(e.note)}</p>`;
   if(e.group){const mates=c.order.filter(x=>x!==k&&c.entries[x].group===e.group).map(x=>c.entries[x].name);if(mates.length)h+=`<p class="note">Superset with ${esc(mates.join(" and "))}</p>`}
   let last=lastSets(e.exId,c.id);
@@ -521,7 +529,7 @@ function focus(k){
       ${stepper("r",K,i,s.r,(e.metric==="sec"?"seconds":"reps")+", set "+(i+1),prevTag(s.r,l?l.r:null,""))}
       <button class="chk" data-a="check" data-k="${K}" data-i="${i}" aria-label="${s.done?"Undo set ":"Log set "}${i+1}">${s.done?"✓":i+1}</button></div>`;
   });
-  h+=`<div class="acts"><button class="later" data-a="later" data-k="${K}">Later</button><button data-a="swap" data-k="${K}">Swap</button><button data-a="skip" data-k="${K}">Skip</button><button class="rm" data-a="remove" data-k="${K}">Remove</button><button data-a="exercise" data-ex="${esc(e.exId)}">Progress</button><span class="sp"></span><button data-a="addset" data-k="${K}" aria-label="Add a set">+ Set</button><button data-a="delset" data-k="${K}" aria-label="Remove last set">− Set</button></div>`;
+  h+=`<div class="acts"><button class="later" data-a="later" data-k="${K}">Later</button><button data-a="swap" data-k="${K}">Swap / rename</button><button data-a="skip" data-k="${K}">Skip</button><button class="rm" data-a="remove" data-k="${K}">Remove</button><button data-a="exercise" data-ex="${esc(e.exId)}">Progress</button><span class="sp"></span><button data-a="addset" data-k="${K}" aria-label="Add a set">+ Set</button><button data-a="delset" data-k="${K}" aria-label="Remove last set">− Set</button></div>`;
   return h+`</section>`;
 }
 function stepper(f,K,i,v,label,pv){
@@ -616,7 +624,7 @@ function vDetail(){
   for(const k of s.order||Object.keys(s.entries)){
     const e=s.entries[k],done=e.sets.filter(x=>x.done);
     const line=done.length?setsText(done,e.load,e.metric):(e.status==="skipped"?"Skipped":"Not done");
-    let from="";if(e.swappedFrom){const p=progEx(e.swappedFrom);from=` <span class="note">(instead of ${esc(p?p.name:e.swappedFrom)})</span>`}
+    let from="";if(e.swappedFrom){const p=progEx(e.swappedFrom);from=` <span class="note">(instead of ${esc(e.swappedFromName||(p?p.name:e.swappedFrom))})</span>`}
     h+=`<button class="de" data-a="exercise" data-ex="${esc(e.exId)}"><h3>${esc(e.name)}${from}</h3><p>${esc(line)}</p></button>`;
   }
   if(!s.finishedAt)h+=`<button class="primary" data-a="resume" data-id="${esc(s.id)}">Resume this workout</button>`;
@@ -624,6 +632,19 @@ function vDetail(){
   const armed=S.confirm==="del-"+s.id;
   h+=`<button class="danger ${armed?"armed":""}" data-a="del" data-id="${esc(s.id)}">${armed?"Tap again to delete":"Delete this workout"}</button>`;
   return h;
+}
+/* ---------- swap ---------- */
+// The template exercise an entry stands for (an entry swapped in keeps a link back).
+const tmplId=e=>e.swappedFrom||e.exId;
+// Find a known exercise by name, so a typed name joins its existing history.
+function knownByName(name){const n=String(name).trim().toLowerCase();return allExercises().find(x=>String(x.name).trim().toLowerCase()===n)||null}
+function swapList(e,q){
+  q=String(q||"").trim().toLowerCase();
+  const all=allExercises().filter(x=>x.id!==e.exId&&(!q||x.name.toLowerCase().includes(q)));
+  const day=S.cur&&S.cur.day;
+  all.sort((a,b)=>(b.day===day)-(a.day===day)||a.name.localeCompare(b.name));
+  const sel=S.sheet&&S.sheet.pick;
+  return all.slice(0,q?8:6).map(x=>{const d=x.day&&dayById(x.day);return `<button class="${x.id===sel?"on":""}" data-a="swpick" data-ex="${esc(x.id)}" data-name="${esc(x.name)}">${esc(x.name)}${d?`<small>${esc(d.name)}</small>`:""}</button>`}).join("");
 }
 function renderSheet(){
   const el=$("#sheet");
@@ -637,8 +658,14 @@ function renderSheet(){
     return;
   }
   if(S.sheet.type==="swap"){
-    const e=S.cur.entries[S.sheet.k];
-    el.innerHTML=`<div class="sh" role="dialog" aria-modal="true" aria-labelledby="sh-t"><h2 id="sh-t">Swap exercise</h2><p>What are you doing instead of ${esc(e.name)}? It’s logged under the new name.</p><label for="sh-n">Exercise</label><input id="sh-n" autocomplete="off" placeholder="e.g. Leg extension"><div class="row2"><button class="cancel" data-a="shx">Cancel</button><button class="go" data-a="doswap">Swap</button></div></div>`;
+    const c=S.cur,e=c.entries[S.sheet.k],dc=doneCount(e),left=e.sets.length-dc,day=dayById(c.day);
+    const inProg=day&&(day.exercises||[]).some(x=>x.id===tmplId(e));
+    el.innerHTML=`<div class="sh" role="dialog" aria-modal="true" aria-labelledby="sh-t"><h2 id="sh-t">Swap or rename</h2>
+      <p>What are you doing instead of ${esc(e.name)}? Pick one you’ve done before or type a new name. Each name keeps its own weights and history.${dc?` Your ${dc} logged set${dc===1?"":"s"} stay${dc===1?"s":""} under ${esc(e.name)}; the other ${left} move${left===1?"s":""} to the new exercise.`:""}</p>
+      <label for="sh-n">Exercise</label><input id="sh-n" autocomplete="off" autocapitalize="sentences" placeholder="e.g. Smith machine calf raise">
+      <div class="sw-list" id="sw-list">${swapList(e,"")}</div>
+      ${inProg?`<label class="tick"><input type="checkbox" id="sh-tpl"><span>Save to template<small>Use it instead of ${esc(e.name)} on future ${esc(day.name)}s</small></span></label>`:""}
+      <div class="row2"><button class="cancel" data-a="shx">Cancel</button><button class="go" data-a="doswap">Swap</button></div></div>`;
   }else{
     el.innerHTML=`<div class="sh" role="dialog" aria-modal="true" aria-labelledby="sh-t"><h2 id="sh-t">Add an exercise</h2><label for="sh-n">Exercise</label><input id="sh-n" autocomplete="off" placeholder="e.g. Hip thrust"><label for="sh-ty">Track</label><select id="sh-ty"><option value="kg">Weight and reps</option><option value="bw">Reps only</option><option value="sec">Time</option></select><label for="sh-s">Sets</label><select id="sh-s"><option>2</option><option selected>3</option><option>4</option><option>5</option></select><div class="row2"><button class="cancel" data-a="shx">Cancel</button><button class="go" data-a="doadd">Add</button></div></div>`;
   }
@@ -770,13 +797,43 @@ const actions={
     save();render();renderSheet();
   },
   mvreset(){const wk=localDate(weekOf()[0]);delete S.moves[wk];save();render();renderSheet()},
+  swpick(b){
+    S.sheet.pick=b.dataset.ex;const i=$("#sh-n");i.value=b.dataset.name;
+    $("#sw-list").innerHTML=swapList(S.cur.entries[S.sheet.k],b.dataset.name);
+  },
   doswap(){
     const name=$("#sh-n").value.trim();if(!name)return $("#sh-n").focus();
-    const c=S.cur,k=S.sheet.k,old=c.entries[k];
-    const base={name,sets:old.sets.length,reps:old.sets[0].r,metric:old.metric,load:old.load,step:old.step,start:old.sets.map(s=>s.w),group:old.group};
-    const ne=makeEntry(base,slug(name),name,c.id);
-    ne.swappedFrom=old.swappedFrom||old.exId;ne.note="";
-    c.entries[k]=ne;c.active=k;S.sheet=null;save();render();
+    const c=S.cur,k=S.sheet.k,old=c.entries[k],tpl=$("#sh-tpl"),toTpl=!!(tpl&&tpl.checked);
+    const known=knownByName(name),newId=known?known.id:slug(name),newName=known?known.name:name;
+    if(newId===old.exId){if(newName!==old.name)toast("That’s the same exercise");else S.sheet=null;renderSheet();return}
+    const done=old.sets.filter(x=>x.done),todo=old.sets.filter(x=>!x.done);
+    if(!todo.length){toast("Every set is logged already. Use “Add an exercise” instead.");return}
+    // New entry: its own history and weights. Falls back to the template's start
+    // weights for a program exercise, else the weights you had for these sets.
+    const pe=progEx(newId);
+    const base=pe?Object.assign({},pe,{sets:todo.length,group:old.group}):{name:newName,sets:todo.length,reps:todo[0].r,metric:old.metric,load:old.load,step:old.step,start:todo.map(x=>x.w),group:old.group};
+    const ne=makeEntry(base,newId,newName,c.id);
+    ne.swappedFrom=tmplId(old);ne.swappedFromName=old.name;if(!pe)ne.note="";
+    let nk;
+    if(done.length){
+      // Mid-exercise: logged sets stay with the original, the rest move.
+      old.sets=done;old.status="done";old.swappedTo=newId;
+      nk=uniqueKey(c.entries,newId);c.entries[nk]=ne;c.order.splice(c.order.indexOf(k)+1,0,nk);
+    }else{c.entries[k]=ne;nk=k}
+    c.active=nk;
+    // Optional: change the template too.
+    const day=dayById(c.day),tid=tmplId(old);
+    if(toTpl&&day){
+      const ex=day.exercises||[],i=ex.findIndex(x=>x.id===tid);
+      if(i>=0){
+        if(ex.some(x=>x.id===newId))ex.splice(i,1);
+        else ex[i]=pe?Object.assign({},pe,{group:ex[i].group}):{id:newId,name:newName,sets:ex[i].sets,reps:ex[i].reps,step:ex[i].step,group:ex[i].group,metric:ex[i].metric,load:ex[i].load,start:todo.map(x=>x.w),addedOn:c.date};
+        for(const key in ex[i]||{})if(ex[i][key]==null)delete ex[i][key];
+      }
+    }
+    (c.swaps=c.swaps||[]).push({at:new Date().toISOString(),from:{exId:old.exId,name:old.name},to:{exId:newId,name:newName},setsKept:done.length,setsMoved:todo.length,savedToTemplate:toTpl&&!!day});
+    S.sheet=null;S.scrollTo=true;save();renderSheet();render();
+    toast(toTpl?"Swapped and saved to "+day.name+"’s template":"Swapped for today");
   },
   doadd(){
     const name=$("#sh-n").value.trim();if(!name)return $("#sh-n").focus();
@@ -821,6 +878,9 @@ document.addEventListener("change",ev=>{
   const v=parseFloat(String(t.value).replace(",","."));
   if(!isFinite(v)||v<0){t.value=fmt(e.sets[i][f]);return}
   setVal(e,i,f,f==="r"?Math.round(v):Math.round(v*100)/100);
+});
+document.addEventListener("input",ev=>{
+  if(ev.target.id==="sh-n"&&S.sheet&&S.sheet.type==="swap"){S.sheet.pick=null;const l=$("#sw-list");if(l)l.innerHTML=swapList(S.cur.entries[S.sheet.k],ev.target.value)}
 });
 document.addEventListener("focusin",ev=>{if(ev.target.matches(".num"))setTimeout(()=>ev.target.select(),0)});
 document.addEventListener("keydown",ev=>{
