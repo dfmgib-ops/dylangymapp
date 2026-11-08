@@ -12,6 +12,8 @@ Personal gym-logging PWA used on an iPhone at the gym. No build step.
 - Users rely on JSON export/import. Old exports must still import.
 - If the data shape needs to change, add a migration where the data is loaded (the `load` code that reads `KEY`) so older data and imported files are upgraded in place. Don't drop or rename fields without migrating.
 - Saved data has `program`, `sessions`, `curId` and `moves` (per-week workout moves: `{"<Monday YYYY-MM-DD>": {"<day id>": "<YYYY-MM-DD>"}}`). `moves` was added later, so it must stay optional; older data and exports don't have it.
+- Optional fields added later (must stay optional): on a session, `swaps` (a list of `{at, from:{exId,name}, to:{exId,name}, setsKept, setsMoved, savedToTemplate}`); on an entry, `swappedFrom`, `swappedFromName`, `swappedTo`; on a program exercise, `addedOn` (added to the template after the program started, so it has no program-start point in Progress).
+- History is keyed by exercise id (`exId`, a slug of the name), so each exercise name keeps its own weights.
 - The program is embedded as `DEFAULT_PROGRAM` in `index.html` (Mon/Wed/Fri). It has a `version` field that can be used to detect old data.
 
 ## Service worker
